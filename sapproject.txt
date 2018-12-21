@@ -1,0 +1,173 @@
+*&---------------------------------------------------------------------*
+*& Report  ZDEMO
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+REPORT  ZDEMO.
+TABLES :ZTRAVELL.
+TABLES :ZFAIR.
+TABLES :ZAGNECIES.
+
+TYPES : BEGIN OF PAYMENTCHARGE,
+  BOOKCHARGE TYPE ZFAIR-BOOKING,
+  PAYMENT TYPE  ZFAIR-PAYMENT,
+  END OF PAYMENTCHARGE.
+
+TYPES: BEGIN OF A_ZTRAVEL,
+  AGENCYNUM TYPE ZAGNECIES-AGENCYNO,
+  AGENCYNAME TYPE ZAGNECIES-AGENCYNAME,
+  AGENCYCITY TYPE ZAGNECIES-CITY,
+  END OF A_ZTRAVEL.
+
+
+  TYPES : APAYMENTCHARGE TYPE SORTED TABLE OF PAYMENTCHARGE WITH UNIQUE KEY PAYMENT,
+  ABOOKING TYPE STANDARD TABLE OF ZTRAVELL WITH NON-UNIQUE KEY FLYDATE CONNID BOOKID,
+  B_ZTRAVEL TYPE STANDARD TABLE OF A_ZTRAVEL WITH NON-UNIQUE KEY AGENCYNUM.
+
+  DATA: BPAYMENTCHARGE TYPE APAYMENTCHARGE,
+        ACUSTOMER TYPE ZTRAVELL,
+        BBOOKING TYPE ABOOKING,
+        C_ZTRAVEL TYPE B_ZTRAVEL.
+
+  PARAMETERS: CUSTID TYPE ZTRAVEL-CUSID .
+
+  START-OF-SELECTION.
+
+  SELECT SINGLE * FROM ZTRAVELL INTO ACUSTOMER WHERE CUSID = CUSTID.
+
+
+  SELECT * FROM ZTRAVELL INTO TABLE BBOOKING WHERE CUSID = CUSTID AND CANCELLED <> 'X'.
+
+PERFORM AMOUNT
+USING CUSTID
+      CHANGING BPAYMENTCHARGE.
+
+    PERFORM GETTRAVEL
+     USING CUSTID
+           CHANGING C_ZTRAVEL.
+
+    PERFORM OUTPUTLIST
+    USING ACUSTOMER
+          BBOOKING
+          BPAYMENTCHARGE
+          C_ZTRAVEL.
+*&---------------------------------------------------------------------*
+*&      Form  AMOUNT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+form AMOUNT
+  USING PCUSID TYPE ZTRAVELL-CUSID
+      CHANGING FPAYMENTCHARGE TYPE APAYMENTCHARGE.
+  SELECT SUM( BOOKING ) PAYMENT
+    FROM ZTRAVELL
+    INTO TABLE FPAYMENTCHARGE
+    WHERE CUSID = PCUSID
+    GROUP BY PAYMENT.
+
+endform.                    " AMOUNT
+*&---------------------------------------------------------------------*
+*&      Form  GETTRAVEL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+form GETTRAVEL
+  USING PCUSID TYPE ZTRAVELL-CUSID
+      CHANGING Y_ZTRAVEL TYPE B_ZTRAVEL.
+   SELECT DISTINCT AGENCYNO AGENCYNAME CITY FROM ZTRAVELL INTO TABLE Y_ZTRAVEL
+     WHERE CUSID = PCUSID
+     ORDER BY AGENCYNAME.
+
+endform.                    " GETTRAVEL
+*&---------------------------------------------------------------------*
+*&      Form  OUTPUTLIST
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+form OUTPUTLIST
+   USING BCUSTOMER TYPE ZTRAVELL
+        CBOOKING TYPE ABOOKING
+        CPAYMENTCHARGE TYPE APAYMENTCHARGE
+  F_ZTRAVEL TYPE B_ZTRAVEL.
+
+  DATA: LBOOKING LIKE LINE OF CBOOKING,
+        LPAYMENTCHARGE LIKE LINE OF CPAYMENTCHARGE,
+        L_ZTRAVEL LIKE LINE OF F_ZTRAVEL.
+
+  DATA LTEXT TYPE STRING.
+
+  CONCATENATE TEXT-WCM
+  BCUSTOMER-CUSNAME
+  INTO LTEXT SEPARATED BY SPACE.
+
+  CONDENSE LTEXT.
+
+  WRITE : / LTEXT.
+  SKIP.
+  WRITE: / TEXT-LOB.
+  ULINE.
+  SKIP.
+
+  LOOP AT CBOOKING INTO LBOOKING .
+
+       AT FIRST.
+          WRITE :/1 'BOOKID',
+              8 'CONNID',
+              15 'DATE',
+              30 'CITYFROM' ,
+          43 ' CITYTO'.
+         ENDAT.
+    WRITE: /
+    LBOOKING-BOOKID,
+    LBOOKING-CONNID,
+    LBOOKING-FLYDATE,
+    LBOOKING-CITYFR RIGHT-JUSTIFIED,'->',
+    LBOOKING-CITYTO.
+    ENDLOOP.
+    SKIP .
+
+    WRITE : / TEXT-SUM.
+    ULINE.
+    SKIP.
+
+    LOOP AT CPAYMENTCHARGE INTO LPAYMENTCHARGE.
+      AT FIRST.
+        WRITE :/1 'BOOKINGCHARGE',
+        18 'PAYMENT FOR TICKET'.
+        ENDAT.
+      WRITE: /
+     LPAYMENTCHARGE-BOOKCHARGE ,
+      LPAYMENTCHARGE-PAYMENT.
+      ENDLOOP.
+      SKIP.
+
+    WRITE / TEXT-TAG.
+    ULINE.
+    SKIP.
+
+    LOOP AT F_ZTRAVEL INTO L_ZTRAVEL.
+      AT FIRST.
+        WRITE :/1 'AGENCYNAME',
+        15 'AGENCYCITY'.
+        ENDAT.
+      WRITE:/ L_ZTRAVEL-AGENCYNAME,
+      L_ZTRAVEL-AGENCYCITY.
+      ENDLOOP.
+
+
+
+
+
+endform.                    " OUTPUTLIST
